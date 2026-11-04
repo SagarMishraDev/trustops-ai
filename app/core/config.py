@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Uploads (Phase 2 enforces these)
     max_upload_size_mb: int = 10
 
+    # Phase 7 - live integration hardening
+    rate_limit_per_minute: int = 120       # per API key (in-memory, per process)
+    webhook_timestamp_tolerance_seconds: int = 300  # replay window for signed webhooks
+
 
 @lru_cache
 def get_settings() -> Settings:

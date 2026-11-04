@@ -49,6 +49,9 @@ def settings_view(business: Business = Depends(get_current_business)):
         "llm_model": s.llm_model,
         "llm_api_key_configured": bool(s.llm_api_key),
         "prompt_version": PROMPT_VERSION,
+        "webhook_secret_configured": bool(business.webhook_secret),
+        "webhook_signature_required": True,
+        "rate_limit_per_minute": s.rate_limit_per_minute,
         "database": "postgresql" if s.database_url.startswith("postgres") else "sqlite",
         "max_upload_size_mb": s.max_upload_size_mb,
     }

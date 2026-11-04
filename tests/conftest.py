@@ -54,6 +54,28 @@ def make_business(client: TestClient, name: str = "Acme Support") -> dict:
     return {"X-API-Key": r.json()["api_key"]}
 
 
+def make_business_full(client: TestClient, name: str = "Acme Support"):
+    """Create a business; return (headers, api_key, webhook_secret)."""
+    r = client.post("/api/v1/businesses", json={"name": name})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    return {"X-API-Key": body["api_key"]}, body["api_key"], body["webhook_secret"]
+
+
+def signed_webhook_post(client: TestClient, api_key: str, secret: str, payload,
+                        timestamp: int | None = None, sign_with: str | None = None):
+    """POST a webhook exactly like a real signed sender (Phase 7 scheme)."""
+    import json as _json
+    import time as _time
+    from app.core.security import compute_webhook_signature
+    body = payload if isinstance(payload, bytes) else _json.dumps(payload).encode("utf-8")
+    ts = str(timestamp if timestamp is not None else int(_time.time()))
+    signature = compute_webhook_signature(sign_with or secret, ts, body)
+    return client.post("/api/v1/webhooks/conversations", content=body, headers={
+        "X-API-Key": api_key, "X-TrustOps-Timestamp": ts,
+        "X-TrustOps-Signature": signature, "Content-Type": "application/json"})
+
+
 GOOD_PAYLOAD = {
     "conversation_id": "C001",
     "user_message": "Where is my order?",

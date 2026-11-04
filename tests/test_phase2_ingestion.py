@@ -1,7 +1,7 @@
 """Phase 2 tests: ingestion (REST, CSV, JSON, webhook), auth, isolation."""
 import io
 import json
-from tests.conftest import GOOD_PAYLOAD, make_business
+from tests.conftest import GOOD_PAYLOAD, make_business, make_business_full, signed_webhook_post
 
 
 def test_create_business_returns_api_key_once(client):
@@ -107,11 +107,11 @@ def test_json_invalid_file_is_400(client):
 
 
 def test_webhook_idempotent(client):
-    headers = make_business(client)
+    headers, api_key, secret = make_business_full(client)
     payload = dict(GOOD_PAYLOAD, conversation_id="W001")
-    r1 = client.post("/api/v1/webhooks/conversations", json=payload, headers=headers)
+    r1 = signed_webhook_post(client, api_key, secret, payload)
     assert r1.status_code == 200 and r1.json()["duplicate"] is False
-    r2 = client.post("/api/v1/webhooks/conversations", json=payload, headers=headers)
+    r2 = signed_webhook_post(client, api_key, secret, payload)
     assert r2.status_code == 200 and r2.json()["duplicate"] is True
     rows = client.get("/api/v1/conversations", headers=headers).json()
     assert len(rows) == 1 and rows[0]["source"] == "webhook"

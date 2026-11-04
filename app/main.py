@@ -8,13 +8,16 @@ Phase 2 adds: /api/v1/businesses, /api/v1/conversations (+ /upload,
 /upload-json), /api/v1/webhooks/conversations - all behind X-API-Key.
 """
 from pathlib import Path
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.core.config import get_settings
 from app.core.database import init_db
 from app.core.logging_config import setup_logging
+from app.core.middleware import RateLimitMiddleware, RequestContextMiddleware
+from app.core.rate_limit import FixedWindowRateLimiter
 from app.api.v1.health import router as health_router
 from app.api.v1.businesses import router as businesses_router
 from app.api.v1.conversations import router as conversations_router
@@ -38,6 +41,41 @@ def create_app() -> FastAPI:
         description="LLM evaluation, monitoring and reliability platform.",
     )
     init_db()
+    app.state.rate_limiter = FixedWindowRateLimiter(settings.rate_limit_per_minute)
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RequestContextMiddleware)  # added last = outermost
+
+    _ERROR_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden",
+                    404: "not_found", 405: "method_not_allowed", 409: "conflict",
+                    413: "payload_too_large", 422: "validation_error",
+                    429: "rate_limited", 503: "service_unavailable", 500: "internal_error"}
+
+    @app.exception_handler(HTTPException)
+    async def http_error_handler(request: Request, exc: HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={
+            "detail": exc.detail,
+            "error_code": _ERROR_CODES.get(exc.status_code, "http_error"),
+            "request_id": getattr(request.state, "request_id", None),
+        })
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(request: Request, exc: RequestValidationError):
+        from fastapi.encoders import jsonable_encoder
+        return JSONResponse(status_code=422, content={
+            "detail": "Request validation failed",
+            "error_code": "validation_error",
+            "errors": jsonable_encoder(exc.errors()),
+            "request_id": getattr(request.state, "request_id", None),
+        })
+
+    @app.exception_handler(Exception)
+    async def unhandled_error_handler(request: Request, exc: Exception):
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={
+            "detail": "Internal server error",
+            "error_code": "internal_error",
+            "request_id": getattr(request.state, "request_id", None),
+        })
 
     @app.get("/", tags=["health"])
     def root():
@@ -47,7 +85,7 @@ def create_app() -> FastAPI:
             "status": "running",
             "docs": "/docs",
             "health": "/health",
-            "phase": "Phase 6 - Benchmarks & Prompt Comparison",
+            "phase": "Phase 7 - Live Integration Hardening",
         }
 
     static_dir = Path(__file__).parent / "static"

@@ -8,5 +8,7 @@ class BusinessCreate(BaseModel):
 class BusinessCreated(BaseModel):
     id: int
     name: str
-    api_key: str  # shown ONCE at creation; only its hash is stored
-    note: str = "Save this API key now. It will not be shown again - only its hash is stored."
+    api_key: str
+    webhook_secret: str
+    note: str = ("Save the API key and webhook secret now - neither is shown again. "
+                 "The API key is stored only as a hash; the webhook secret is your HMAC signing key.")

@@ -6,7 +6,7 @@ safe, relevant and policy-compliant answers. It does NOT replace the chatbot -
 it independently monitors it, flags incorrect / unsupported / risky answers,
 explains why, and suggests a safer reply.
 
-## Current status: Phase 6 - Benchmark & Prompt Comparison (complete, tested)
+## Current status: Phase 7 - Live Integration Hardening (complete, tested)
 Working: FastAPI app, config, logging, `GET /` and `GET /health`; SQLAlchemy DB (SQLite, PostgreSQL-ready);
 API-key auth with business-level isolation; conversation ingestion via REST, CSV upload, JSON upload and webhooks,
 with duplicate protection and per-record error reporting. Phase 3 adds the evaluation engine:
@@ -32,6 +32,28 @@ exactly that. (The benchmark also caught and fixed a real bug: Indian phone numb
 +91 98765 43210 were not detected.) Prompt comparison is honest: with the mock evaluator, different
 prompts produce identical metrics and the API says so; prompts only change behaviour with a real LLM.
 Run it yourself without the server: `python scripts/run_benchmark.py`.
+Phase 7 hardening: (1) **Signed webhooks** - every business gets a webhook secret (`whsec_...`,
+shown once at creation). Webhook senders must send `X-TrustOps-Timestamp` and
+`X-TrustOps-Signature: sha256=<HMAC-SHA256(secret, "<timestamp>.<raw body>")>`. Tampered bodies and
+wrong secrets get 401 `invalid_signature`; timestamps older than 5 minutes get 401 `stale_timestamp`
+(replay protection). (2) **Rate limiting** - 120 requests/minute per API key (configurable), excess
+gets 429 with `Retry-After`. Counters are in-memory per process; multi-instance deployments need
+Redis (noted for production). (3) **Structured errors + request IDs** - every error body is
+`{detail, error_code, request_id}` and every response carries `X-Request-ID`; security headers
+(nosniff, DENY framing, no-referrer) are set on all responses.
+
+Send a signed webhook (Python example):
+```python
+import hashlib, hmac, json, time, urllib.request
+body = json.dumps({"conversation_id": "C1", "user_message": "Where is my order?",
+                   "assistant_response": "Your order is delivered.",
+                   "timestamp": "2026-11-04T10:30:00", "session_id": "S1"}).encode()
+ts = str(int(time.time()))
+sig = "sha256=" + hmac.new(SECRET.encode(), f"{ts}.".encode() + body, hashlib.sha256).hexdigest()
+req = urllib.request.Request(URL, data=body, method="POST", headers={
+    "X-API-Key": API_KEY, "X-TrustOps-Timestamp": ts, "X-TrustOps-Signature": sig,
+    "Content-Type": "application/json"})
+```
 Not yet built (honest scope):
 policies (Phase 4), dashboard (Phase 5), benchmark (Phase 6), webhooks (Phase 7),
 Docker deployment (Phase 8).
@@ -104,7 +126,7 @@ Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET
 ```powershell
 pytest -v
 ```
-Expected: 57 passed (Phases 1-5 plus Phase 6: dataset integrity, metric math, real benchmark numbers, phone-format regression, prompt versions + honest compare, isolation).
+Expected: 66 passed (Phases 1-6 plus Phase 7: secret shown once + never leaked, signed webhook accepted, tampered/wrong-secret/stale all 401 with distinct error codes, structured errors + request IDs, security headers, 429 rate limiting).
 
 ## Project structure
 ```

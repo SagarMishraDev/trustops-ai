@@ -20,6 +20,10 @@ class Business(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     api_key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    # The webhook secret is the HMAC key itself, so unlike the API key it
+    # cannot be stored only as a hash - verification needs the key. It is
+    # shown once at creation and never returned by any GET endpoint.
+    webhook_secret: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     conversations = relationship("Conversation", back_populates="business", cascade="all, delete-orphan")

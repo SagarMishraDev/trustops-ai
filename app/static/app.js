@@ -78,7 +78,7 @@ function demoApi(path, opts = {}) {
       return resolve({ a, b, difference_b_minus_a: { f1_score: 0, precision: 0, recall: 0, accuracy: 0 }, winner_by_f1: "tie (mock evaluator - prompt has no effect)", note: "Both runs used the mock evaluator: prompt text does not change mock behaviour, so identical metrics are expected. Configure a real LLM provider to compare prompts meaningfully." }); }
     if (path === "/api/v1/prompt-versions" && method === "GET") return resolve(d.promptVersions || []);
     if (path === "/api/v1/prompt-versions" && method === "POST") { const pv = { id: (d.promptVersions || []).length + 1, name: body.name, version: body.version, prompt_content: body.prompt_content }; d.promptVersions = d.promptVersions || []; d.promptVersions.push(pv); return resolve(pv); }
-    if (path === "/api/v1/settings") return resolve({ business_name: "Demo Business (preview)", llm_provider: "mock", llm_model: "mock-evaluator-v1", llm_api_key_configured: false, prompt_version: "eval-v1", database: "sqlite", max_upload_size_mb: 10 });
+    if (path === "/api/v1/settings") return resolve({ business_name: "Demo Business (preview)", llm_provider: "mock", llm_model: "mock-evaluator-v1", llm_api_key_configured: false, prompt_version: "eval-v1", database: "sqlite", max_upload_size_mb: 10, webhook_secret_configured: true, webhook_signature_required: true, rate_limit_per_minute: 120 });
     if (path === "/api/v1/demo/seed") return resolve({ policies_created: 0, imported: 0, duplicates_skipped: 8, evaluated: 0 });
     return resolve({});
   }, 60));
@@ -181,7 +181,12 @@ function renderSettings() {
   const s = state.settings;
   const rows = [["Business", s.business_name], ["LLM provider", s.llm_provider], ["Evaluation model", s.llm_model],
     ["LLM API key configured", s.llm_api_key_configured ? "Yes (value never shown)" : "No — mock evaluator in use"],
-    ["Prompt version", s.prompt_version], ["Database", s.database], ["Max upload (MB)", s.max_upload_size_mb]];
+    ["Prompt version", s.prompt_version], ["Database", s.database], ["Max upload (MB)", s.max_upload_size_mb],
+    ["Webhook signing", s.webhook_signature_required ? "HMAC-SHA256 signature required" : "—"],
+    ["Webhook secret", s.webhook_secret_configured ? "Configured (value never sent by server)" : "Not configured"],
+    ["Rate limit", (s.rate_limit_per_minute ?? "—") + " requests / minute per API key"]];
+  const localSecret = localStorage.getItem("trustops_whsec");
+  if (localSecret) rows.push(["Webhook secret (saved at creation in this browser)", localSecret + " — copy it into your webhook sender"]);
   $("settingsTable").innerHTML = `<table><tbody>` + rows.map(r => `<tr><th style="width:220px">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("") + `</tbody></table>`;
 }
 
@@ -321,6 +326,7 @@ $("demoBtn").addEventListener("click", async () => {
     const res = await fetch("/api/v1/businesses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Demo Business" }) });
     if (!res.ok) throw new Error("business creation failed");
     const biz = await res.json(); state.key = biz.api_key; localStorage.setItem("trustops_key", state.key);
+    if (biz.webhook_secret) localStorage.setItem("trustops_whsec", biz.webhook_secret);
     await api("/api/v1/demo/seed", { method: "POST" });
     enterApp(); toast("Demo workspace ready — explore Overview, Conversations and the Review Queue");
   } catch (e) { $("loginError").textContent = "Demo setup failed: " + e.message; $("demoBtn").textContent = "Create demo workspace (1 click)"; }
