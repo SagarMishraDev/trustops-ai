@@ -5,7 +5,7 @@
 "use strict";
 const DEMO = typeof window.TRUSTOPS_DEMO_DATA !== "undefined";
 const state = { key: DEMO ? "demo" : (localStorage.getItem("trustops_key") || ""),
-  overview: null, issues: null, trends: [], conversations: [], evaluations: [], queue: [], policies: [], settings: null, charts: {} };
+  overview: null, issues: null, trends: [], conversations: [], evaluations: [], queue: [], policies: [], settings: null, charts: {}, benchmarks: [], promptVersions: [] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const trunc = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "");
@@ -61,6 +61,23 @@ function demoApi(path, opts = {}) {
     const polMatch = path.match(/^\/api\/v1\/policies\/(\d+)$/);
     if (polMatch && method === "PUT") { const p = d.policies.find(x => x.id === Number(polMatch[1])); Object.assign(p, body); return resolve(p); }
     if (polMatch && method === "DELETE") { d.policies = d.policies.filter(x => x.id !== Number(polMatch[1])); return resolve({ deleted: true }); }
+    if (path === "/api/v1/benchmarks" && method === "GET") return resolve(d.benchmarks || []);
+    if (path === "/api/v1/benchmarks/run") {
+      const src = (d.benchmarks || [])[0];
+      if (!src) return resolve({});
+      const clone = JSON.parse(JSON.stringify(src));
+      clone.id = (d.benchmarks.length + 1);
+      if (body.prompt_version_id) { const pv = (d.promptVersions || []).find(x => x.id === body.prompt_version_id); if (pv) clone.prompt_version_label = pv.name + "@" + pv.version; }
+      clone.details = src.details || [];
+      d.benchmarks.unshift(clone); return resolve(clone);
+    }
+    const runMatch = path.match(/^\/api\/v1\/benchmarks\/(\d+)$/);
+    if (runMatch) return resolve((d.benchmarks || []).find(r => r.id === Number(runMatch[1])) || {});
+    const cmpMatch = path.match(/^\/api\/v1\/benchmarks\/compare\/(\d+)\/(\d+)$/);
+    if (cmpMatch) { const a = (d.benchmarks || []).find(r => r.id === Number(cmpMatch[1])), b = (d.benchmarks || []).find(r => r.id === Number(cmpMatch[2]));
+      return resolve({ a, b, difference_b_minus_a: { f1_score: 0, precision: 0, recall: 0, accuracy: 0 }, winner_by_f1: "tie (mock evaluator - prompt has no effect)", note: "Both runs used the mock evaluator: prompt text does not change mock behaviour, so identical metrics are expected. Configure a real LLM provider to compare prompts meaningfully." }); }
+    if (path === "/api/v1/prompt-versions" && method === "GET") return resolve(d.promptVersions || []);
+    if (path === "/api/v1/prompt-versions" && method === "POST") { const pv = { id: (d.promptVersions || []).length + 1, name: body.name, version: body.version, prompt_content: body.prompt_content }; d.promptVersions = d.promptVersions || []; d.promptVersions.push(pv); return resolve(pv); }
     if (path === "/api/v1/settings") return resolve({ business_name: "Demo Business (preview)", llm_provider: "mock", llm_model: "mock-evaluator-v1", llm_api_key_configured: false, prompt_version: "eval-v1", database: "sqlite", max_upload_size_mb: 10 });
     if (path === "/api/v1/demo/seed") return resolve({ policies_created: 0, imported: 0, duplicates_skipped: 8, evaluated: 0 });
     return resolve({});
@@ -90,6 +107,8 @@ async function loadAll() {
     await Promise.all([api("/api/v1/analytics/overview"), api("/api/v1/analytics/issues"), api("/api/v1/analytics/trends?days=14"),
       api("/api/v1/conversations?limit=200"), api("/api/v1/evaluations?limit=200"), api("/api/v1/reviews/queue"),
       api("/api/v1/policies"), api("/api/v1/settings")]);
+  try { state.benchmarks = await api("/api/v1/benchmarks"); state.promptVersions = await api("/api/v1/prompt-versions"); } catch (e) { state.benchmarks = []; state.promptVersions = []; }
+  renderBenchmarks();
   $("bizName").textContent = "🏢 " + (state.settings.business_name || "Business");
   $("queueBadge").textContent = state.queue.length || "";
   renderOverview(); renderConversations(); renderQueue(); renderPolicies(); renderSettings();
@@ -217,6 +236,30 @@ window.deletePolicy = async function (id) {
   catch (e) { toast("Error: " + e.message); }
 };
 
+
+/* ---------------- benchmarks ---------------- */
+function renderBenchmarks() {
+  const pct = (x) => (x * 100).toFixed(1) + "%";
+  const sel = $("runPromptSelect");
+  if (sel) sel.innerHTML = '<option value="">Default prompt (eval-v1)</option>' + state.promptVersions.map(pv => `<option value="${pv.id}">${esc(pv.name)}@${esc(pv.version)}</option>`).join("");
+  const runs = $("runsTable");
+  if (runs) {
+    runs.innerHTML = state.benchmarks.length ? `<table><thead><tr><th>Run</th><th>Prompt</th><th>Model</th><th>Precision</th><th>Recall</th><th>F1</th><th>Accuracy</th><th>TP/FP/TN/FN</th><th>Avg latency</th><th>Cost</th></tr></thead><tbody>` +
+      state.benchmarks.map(r => `<tr><td>#${r.id}</td><td>${esc(r.prompt_version_label)}</td><td>${esc(r.evaluation_model)}</td><td>${pct(r.precision)}</td><td>${pct(r.recall)}</td><td><strong>${pct(r.f1_score)}</strong></td><td>${pct(r.accuracy)}</td><td>${r.true_positives}/${r.false_positives}/${r.true_negatives}/${r.false_negatives}</td><td>${r.average_latency_ms} ms</td><td>$${r.total_estimated_cost}</td></tr>`).join("") + `</tbody></table>`
+      : '<p class="muted">No benchmark runs yet. Run your first benchmark above.</p>';
+  }
+  const latest = state.benchmarks[0];
+  if (latest && latest.details && latest.details.length) {
+    const missed = latest.details.filter(d => d.outcome === "false_negative" || d.outcome === "false_positive");
+    $("runResult").innerHTML = `<p>Latest run #${latest.id}: <strong>F1 ${pct(latest.f1_score)}</strong> · Precision ${pct(latest.precision)} · Recall ${pct(latest.recall)} · Category detection ${pct(latest.category_detection_rate || 0)}</p>` +
+      (missed.length ? `<p class="muted">Missed/wrong cases (${missed.length}):</p>` + missed.map(d => `<div class="issue ${d.outcome === "false_negative" ? "high" : ""}"><strong>${esc(d.case_id)}</strong> [${esc(d.group)}] — ${esc(d.outcome.replace(/_/g, " "))} · expected categories: ${esc((d.expected_categories || []).join(", ") || "—")} · detected: ${esc((d.detected_categories || []).join(", ") || "none")}</div>`).join("")
+                     : '<p class="muted">No missed cases in the latest run.</p>');
+  }
+  const pvList = $("pvList");
+  if (pvList) pvList.innerHTML = state.promptVersions.length ? state.promptVersions.map(pv => `<div class="issue"><strong>${esc(pv.name)}@${esc(pv.version)}</strong><div class="meta">${esc(trunc(pv.prompt_content, 140))}</div></div>`).join("") : '<p class="muted">No saved prompt versions yet.</p>';
+  ["cmpA", "cmpB"].forEach((id, idx) => { const s = $(id); if (s) s.innerHTML = state.benchmarks.map(r => `<option value="${r.id}" ${idx === 1 && state.benchmarks[1] && r.id === state.benchmarks[1].id ? "selected" : ""}>Run #${r.id} — ${esc(r.prompt_version_label)} (F1 ${pct(r.f1_score)})</option>`).join(""); });
+}
+
 /* ---------------- navigation + events ---------------- */
 function switchView(name) {
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
@@ -236,6 +279,27 @@ $("addPolicyBtn").addEventListener("click", async () => {
 $("seedBtn").addEventListener("click", async () => { try { const r = await api("/api/v1/demo/seed", { method: "POST" }); toast(`Demo data: ${r.imported} imported, ${r.evaluated} evaluated`); await loadAll(); switchView("overview"); } catch (e) { toast("Error: " + e.message); } });
 $("csvFile").addEventListener("change", async (e) => { if (!e.target.files[0]) return; try { const r = await apiUpload("/api/v1/conversations/upload", e.target.files[0]); toast(`CSV: ${r.imported} imported, ${r.duplicates_skipped} duplicates, ${r.failed} failed`); await loadAll(); } catch (err) { toast("Error: " + err.message); } });
 $("jsonFile").addEventListener("change", async (e) => { if (!e.target.files[0]) return; try { const r = await apiUpload("/api/v1/conversations/upload-json", e.target.files[0]); toast(`JSON: ${r.imported} imported, ${r.duplicates_skipped} duplicates, ${r.failed} failed`); await loadAll(); } catch (err) { toast("Error: " + err.message); } });
+
+$("runBenchmarkBtn").addEventListener("click", async () => {
+  try { $("runResult").innerHTML = '<p class="muted">Running 50 cases…</p>';
+    const selVal = $("runPromptSelect").value;
+    const run = await api("/api/v1/benchmarks/run", { method: "POST", body: JSON.stringify(selVal ? { prompt_version_id: Number(selVal) } : {}) });
+    toast("Benchmark complete"); await loadAll();
+    const top = state.benchmarks.find(r => r.id === run.id); if (top) top.details = run.details;
+    renderBenchmarks();
+  } catch (e) { toast("Error: " + e.message); }
+});
+$("addPvBtn").addEventListener("click", async () => {
+  const name = $("pvName").value.trim(), version = $("pvVersion").value.trim(), content = $("pvContent").value.trim();
+  if (name.length < 2 || !version || content.length < 10) { toast("Name, version and prompt content (10+ chars) are required"); return; }
+  try { await api("/api/v1/prompt-versions", { method: "POST", body: JSON.stringify({ name, version, prompt_content: content }) }); $("pvName").value = $("pvVersion").value = $("pvContent").value = ""; toast("Prompt version saved"); await loadAll(); renderBenchmarks(); } catch (e) { toast("Error: " + e.message); }
+});
+$("cmpBtn").addEventListener("click", async () => {
+  const a = $("cmpA").value, b = $("cmpB").value; if (!a || !b || a === b) { toast("Pick two different runs"); return; }
+  try { const r = await api(`/api/v1/benchmarks/compare/${a}/${b}`);
+    $("cmpResult").innerHTML = `<strong>Winner by F1: ${esc(r.winner_by_f1)}</strong><br>ΔF1 (B−A): ${r.difference_b_minus_a.f1_score} · ΔPrecision: ${r.difference_b_minus_a.precision} · ΔRecall: ${r.difference_b_minus_a.recall}<br>${esc(r.note)}`;
+  } catch (e) { toast("Error: " + e.message); }
+});
 $("themeBtn").addEventListener("click", () => { const dark = document.documentElement.classList.toggle("dark"); $("themeBtn").textContent = dark ? "☀️ Light" : "🌙 Dark"; localStorage.setItem("trustops_theme", dark ? "dark" : "light"); });
 if (localStorage.getItem("trustops_theme") === "dark") { document.documentElement.classList.add("dark"); $("themeBtn").textContent = "☀️ Light"; }
 $("logoutBtn").addEventListener("click", () => { localStorage.removeItem("trustops_key"); location.reload(); });

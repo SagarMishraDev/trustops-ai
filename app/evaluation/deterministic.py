@@ -9,7 +9,7 @@ import re
 from app.schemas.evaluation import IssueSchema
 
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-PHONE_RE = re.compile(r"(?:\+?91[\s-]?)?(?:[6-9]\d{9})\b|\b\+?1?[\s-]?\(?\d{3}\)?[\s-]\d{3}[\s-]\d{4}\b")
+PHONE_RE = re.compile(r"(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}\b|\b\+?1?[\s-]?\(?\d{3}\)?[\s-]\d{3}[\s-]\d{4}\b")  # Indian mobiles, incl. the common 5+5 spaced format
 LONG_NUMBER_RE = re.compile(r"\b(?:\d[\s-]?){12,18}\d\b")  # card / Aadhaar-like digit runs
 PASSWORD_REQUEST_PHRASES = [
     "your password", "share your password", "send your password", "your otp",

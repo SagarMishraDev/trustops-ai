@@ -30,6 +30,7 @@
       <button class="nav-btn" data-view="conversations">💬 Conversations</button>
       <button class="nav-btn" data-view="queue">🧑‍⚖️ Review Queue <span id="queueBadge" class="badge"></span></button>
       <button class="nav-btn" data-view="policies">📜 Policies</button>
+      <button class="nav-btn" data-view="benchmarks">🎯 Benchmarks</button>
       <button class="nav-btn" data-view="settings">⚙️ Settings</button>
     </nav>
     <div class="sidebar-foot">
@@ -79,6 +80,38 @@
         <button id="addPolicyBtn" class="btn primary">Add policy</button>
       </div>
       <div id="policyList"></div>
+    </section>
+
+
+    <section id="view-benchmarks" class="view" hidden>
+      <h1>Benchmark &amp; Prompt Comparison</h1>
+      <p class="muted">50 hand-labeled conversations (15 correct, 35 problems). Metrics below are measured from real engine runs — never typed in. Missed cases are shown, not hidden.</p>
+      <div class="card">
+        <h3>Run benchmark</h3>
+        <div class="toolbar">
+          <select id="runPromptSelect" style="width:auto"><option value="">Default prompt (eval-v1)</option></select>
+          <button id="runBenchmarkBtn" class="btn primary">Run benchmark (50 cases)</button>
+        </div>
+        <div id="runResult"></div>
+      </div>
+      <div class="card"><h3>Saved runs</h3><div id="runsTable"></div></div>
+      <div class="card">
+        <h3>Prompt versions</h3>
+        <input id="pvName" placeholder="Name — e.g. Strict evaluator">
+        <input id="pvVersion" placeholder="Version — e.g. v2">
+        <textarea id="pvContent" rows="3" placeholder="System prompt content for this version (used only by a real LLM evaluator)"></textarea>
+        <button id="addPvBtn" class="btn primary">Save prompt version</button>
+        <div id="pvList" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <h3>Compare two runs</h3>
+        <div class="toolbar">
+          <select id="cmpA" style="width:auto"></select>
+          <select id="cmpB" style="width:auto"></select>
+          <button id="cmpBtn" class="btn">Compare</button>
+        </div>
+        <div id="cmpResult" class="muted"></div>
+      </div>
     </section>
 
     <section id="view-settings" class="view" hidden>

@@ -45,19 +45,28 @@ def _score_and_status(issues: list[IssueSchema]) -> tuple[int, str, str, bool]:
     return score, "passed", risk, False
 
 
-def evaluate_conversation(db: Session, conversation: Conversation,
-                          policies: list[str] | None = None,
-                          evidence: str | None = None) -> Evaluation:
+def run_pipeline(user_message: str, assistant_response: str,
+                 policies: list | None = None, evidence: str | None = None,
+                 evaluator=None) -> dict:
+    """The full evaluation pipeline WITHOUT any database access.
+
+    This is the single source of truth used by both the live orchestrator
+    (which persists results) and the Phase 6 benchmark runner (which must
+    not pollute the production tables with benchmark conversations).
+    Returns a plain dict: issues, score, status, risk, review flag,
+    assessment, suggested reply, model, latency, cost, injection flag.
+    """
     policies = policies or []
     start = time.perf_counter()
 
     det_issues, claim_assessment, injection = deterministic.run_deterministic_checks(
-        conversation.user_message, conversation.assistant_response, policies, evidence)
+        user_message, assistant_response, policies, evidence)
 
-    evaluator = get_evaluator()  # may raise EvaluatorConfigError - API layer turns it into a clean 503
+    if evaluator is None:
+        evaluator = get_evaluator()  # may raise EvaluatorConfigError - API layer turns it into a clean 503
     inputs = {
-        "user_message": conversation.user_message,
-        "assistant_response": conversation.assistant_response,
+        "user_message": user_message,
+        "assistant_response": assistant_response,
         "policies": policies, "evidence": evidence,
         "_claim_assessment": claim_assessment,
     }
@@ -91,12 +100,28 @@ def evaluate_conversation(db: Session, conversation: Conversation,
         suggested = top.suggested_action
 
     latency_ms = int((time.perf_counter() - start) * 1000)
+    return {
+        "issues": issues, "overall_score": score, "status": status, "risk_level": risk,
+        "human_review_required": review, "evidence_assessment": assessment,
+        "suggested_reply": suggested, "evaluation_model": model_name,
+        "latency_ms": latency_ms, "estimated_cost": estimated_cost,
+        "prompt_injection_detected": injection,
+    }
+
+
+def evaluate_conversation(db: Session, conversation: Conversation,
+                          policies: list | None = None,
+                          evidence: str | None = None) -> Evaluation:
+    r = run_pipeline(conversation.user_message, conversation.assistant_response,
+                     policies, evidence)
+    issues = r["issues"]
     ev = Evaluation(
-        conversation_id=conversation.id, overall_score=score, status=status, risk_level=risk,
-        evidence_assessment=assessment, prompt_injection_detected=injection,
-        suggested_reply=suggested, human_review_required=review,
-        evaluation_model=model_name, prompt_version=PROMPT_VERSION,
-        latency_ms=latency_ms, estimated_cost=estimated_cost,
+        conversation_id=conversation.id, overall_score=r["overall_score"], status=r["status"],
+        risk_level=r["risk_level"], evidence_assessment=r["evidence_assessment"],
+        prompt_injection_detected=r["prompt_injection_detected"],
+        suggested_reply=r["suggested_reply"], human_review_required=r["human_review_required"],
+        evaluation_model=r["evaluation_model"], prompt_version=PROMPT_VERSION,
+        latency_ms=r["latency_ms"], estimated_cost=r["estimated_cost"],
     )
     db.add(ev)
     db.flush()

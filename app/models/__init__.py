@@ -4,5 +4,6 @@ from app.models.conversation import Conversation
 from app.models.evaluation import Evaluation, EvaluationIssue
 from app.models.policy import Policy, EvidenceRecord
 from app.models.review import HumanReview
+from app.models.benchmark import BenchmarkRun, PromptVersion
 
-__all__ = ["Business", "Conversation", "Evaluation", "EvaluationIssue", "Policy", "EvidenceRecord", "HumanReview"]
+__all__ = ["Business", "Conversation", "Evaluation", "EvaluationIssue", "Policy", "EvidenceRecord", "HumanReview", "BenchmarkRun", "PromptVersion"]

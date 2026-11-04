@@ -62,14 +62,14 @@ class MockEvaluator:
 
 # ---------------- Real LLM (LCEL) ----------------
 class LLMEvaluator:
-    def __init__(self, llm, model_name: str):
+    def __init__(self, llm, model_name: str, prompt_content: str | None = None):
         self.name = model_name
         self._llm = llm
-        self.chain = build_prompt() | llm
+        self.chain = build_prompt(prompt_content) | llm
 
     def invoke(self, inputs: dict) -> EvaluationResultSchema:
         message = self.chain.invoke({
-            "policies": "\n".join(f"- {p}" for p in inputs.get("policies", [])) or "No policies provided.",
+            "policies": "\n".join(f"- {getattr(p, 'rule_text', p)}" for p in inputs.get("policies", [])) or "No policies provided.",
             "evidence": inputs.get("evidence") or "No evidence provided.",
             "user_message": inputs["user_message"],
             "assistant_response": inputs["assistant_response"],
@@ -99,7 +99,7 @@ def parse_llm_output(text: str) -> EvaluationResultSchema:
     return EvaluationResultSchema.model_validate(data)
 
 
-def get_evaluator():
+def get_evaluator(prompt_content: str | None = None):
     """Factory - picks the evaluator from configuration, fails loudly with
     a readable message when a real provider is chosen but misconfigured."""
     settings = get_settings()
@@ -117,5 +117,6 @@ def get_evaluator():
                   "temperature": settings.llm_temperature}
         if settings.llm_base_url:
             kwargs["base_url"] = settings.llm_base_url
-        return LLMEvaluator(ChatOpenAI(**kwargs), model_name=settings.llm_model)
+        return LLMEvaluator(ChatOpenAI(**kwargs), model_name=settings.llm_model,
+                            prompt_content=prompt_content)
     raise EvaluatorConfigError(f"Unknown LLM_PROVIDER '{provider}'. Use mock or openai.")

@@ -6,7 +6,7 @@ safe, relevant and policy-compliant answers. It does NOT replace the chatbot -
 it independently monitors it, flags incorrect / unsupported / risky answers,
 explains why, and suggests a safer reply.
 
-## Current status: Phase 5 - Dashboard, Analytics & Human Review (complete, tested)
+## Current status: Phase 6 - Benchmark & Prompt Comparison (complete, tested)
 Working: FastAPI app, config, logging, `GET /` and `GET /health`; SQLAlchemy DB (SQLite, PostgreSQL-ready);
 API-key auth with business-level isolation; conversation ingestion via REST, CSV upload, JSON upload and webhooks,
 with duplicate protection and per-record error reporting. Phase 3 adds the evaluation engine:
@@ -21,7 +21,18 @@ a human review queue (decisions stored separately - the AI evaluation is never e
 endpoint that never exposes key values, a one-click demo seed, and a SaaS dashboard served at
 `/dashboard` (sidebar, KPI cards, Chart.js charts, conversation explorer with filters, evaluation
 detail with review form, policy management, settings actions, dark/light theme). Tests: 51/51 passing.
-Not yet built (honest scope): benchmark + prompt comparison (Phase 6),
+Phase 6 adds: a 50-case hand-labeled benchmark (`benchmarks/benchmark_dataset.json`: 15 correct,
+35 problems across unsupported claims, policy violations, sensitive data, irrelevant, incomplete and
+contradictory responses), a runner that measures precision / recall / F1 / accuracy, category
+detection, latency and cost from REAL engine outputs, prompt-version storage, run comparison, and a
+Benchmarks page in the dashboard. **Measured result (mock evaluator): TP 32, FP 0, TN 15, FN 3 —
+Precision 1.000, Recall 0.914, F1 0.955, Accuracy 0.940.** The only missed cases are the 3
+contradictory ones: context-consistency judgment needs a real LLM, and the benchmark exists to prove
+exactly that. (The benchmark also caught and fixed a real bug: Indian phone numbers written as
++91 98765 43210 were not detected.) Prompt comparison is honest: with the mock evaluator, different
+prompts produce identical metrics and the API says so; prompts only change behaviour with a real LLM.
+Run it yourself without the server: `python scripts/run_benchmark.py`.
+Not yet built (honest scope):
 policies (Phase 4), dashboard (Phase 5), benchmark (Phase 6), webhooks (Phase 7),
 Docker deployment (Phase 8).
 
@@ -93,7 +104,7 @@ Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET
 ```powershell
 pytest -v
 ```
-Expected: 51 passed (Phases 1-4 plus Phase 5: real analytics numbers, review flow + evaluation immutability, queue behaviour, settings key-safety, idempotent demo seed, dashboard serving).
+Expected: 57 passed (Phases 1-5 plus Phase 6: dataset integrity, metric math, real benchmark numbers, phone-format regression, prompt versions + honest compare, isolation).
 
 ## Project structure
 ```

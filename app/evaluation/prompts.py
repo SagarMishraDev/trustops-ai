@@ -47,5 +47,7 @@ Assistant: {assistant_response}
 Evaluate the Assistant response now. JSON only."""
 
 
-def build_prompt() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages([("system", SYSTEM), ("human", HUMAN)])
+def build_prompt(system_override: str | None = None) -> ChatPromptTemplate:
+    """system_override lets a saved PromptVersion replace the system text -
+    that is exactly what Phase 6 prompt comparison varies between runs."""
+    return ChatPromptTemplate.from_messages([("system", system_override or SYSTEM), ("human", HUMAN)])

@@ -25,6 +25,7 @@ from app.api.v1.evidence import router as evidence_router
 from app.api.v1.reviews import router as reviews_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.system import router as system_router
+from app.api.v1.benchmarks import router as benchmarks_router
 
 settings = get_settings()
 logger = setup_logging(debug=settings.debug)
@@ -46,7 +47,7 @@ def create_app() -> FastAPI:
             "status": "running",
             "docs": "/docs",
             "health": "/health",
-            "phase": "Phase 5 - Dashboard & Review Queue",
+            "phase": "Phase 6 - Benchmarks & Prompt Comparison",
         }
 
     static_dir = Path(__file__).parent / "static"
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(reviews_router)
     app.include_router(analytics_router)
     app.include_router(system_router)
+    app.include_router(benchmarks_router)
     logger.info("%s v%s started (env=%s)", settings.app_name, settings.app_version, settings.environment)
     return app
 
