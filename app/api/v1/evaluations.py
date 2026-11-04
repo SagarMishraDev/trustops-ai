@@ -9,6 +9,7 @@ from app.evaluation.evaluators import EvaluatorConfigError
 from app.models.business import Business
 from app.models.conversation import Conversation
 from app.models.evaluation import Evaluation
+from app.models.policy import EvidenceRecord, Policy
 from app.schemas.evaluation import BulkEvaluationRequest, EvaluationOut, EvaluationRequest
 from app.services import evaluation as evaluation_service
 
@@ -23,9 +24,32 @@ def _own_conversation(db: Session, business: Business, conversation_id: int) -> 
     return convo
 
 
-def _run(db, convo, policies, evidence):
+def _business_context(db: Session, business: Business, extra_policies: list[str],
+                      extra_evidence: str | None) -> tuple[list, str | None]:
+    """Phase 4: evaluations automatically use the business's ENABLED DB
+    policies and its evidence records. Anything passed in the request is
+    added on top (deduped by rule text)."""
+    db_policies = (db.query(Policy)
+                   .filter(Policy.business_id == business.id, Policy.enabled.is_(True))
+                   .order_by(Policy.id).all())
+    known = {p.rule_text.strip().lower() for p in db_policies}
+    merged: list = list(db_policies)
+    for text in extra_policies or []:
+        if text.strip().lower() not in known:
+            merged.append(text)
+    records = (db.query(EvidenceRecord)
+               .filter(EvidenceRecord.business_id == business.id)
+               .order_by(EvidenceRecord.id).all())
+    parts = [f"{r.topic}: {r.content}" for r in records]
+    if extra_evidence:
+        parts.append(extra_evidence)
+    return merged, ("\n".join(parts) if parts else None)
+
+
+def _run(db, business, convo, policies, evidence):
+    merged_policies, merged_evidence = _business_context(db, business, policies, evidence)
     try:
-        return evaluation_service.evaluate_conversation(db, convo, policies, evidence)
+        return evaluation_service.evaluate_conversation(db, convo, merged_policies, merged_evidence)
     except EvaluatorConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -34,7 +58,7 @@ def _run(db, convo, policies, evidence):
 def evaluate_one(payload: EvaluationRequest, db: Session = Depends(get_db),
                  business: Business = Depends(get_current_business)):
     convo = _own_conversation(db, business, payload.conversation_id)
-    ev = _run(db, convo, payload.policies, payload.evidence)
+    ev = _run(db, business, convo, payload.policies, payload.evidence)
     return EvaluationOut.from_model(ev)
 
 
@@ -45,7 +69,7 @@ def evaluate_bulk(payload: BulkEvaluationRequest, db: Session = Depends(get_db),
     if payload.conversation_ids:
         q = q.filter(Conversation.id.in_(payload.conversation_ids))
     conversations = q.order_by(Conversation.id).limit(200).all()
-    return [EvaluationOut.from_model(_run(db, c, payload.policies, None)) for c in conversations]
+    return [EvaluationOut.from_model(_run(db, business, c, payload.policies, None)) for c in conversations]
 
 
 @router.get("", response_model=list[EvaluationOut])

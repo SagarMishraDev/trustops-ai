@@ -23,6 +23,8 @@ class IssueSchema(BaseModel):
     evidence: str | None = None
     suggested_action: str | None = None
     source: str = "llm"
+    policy_id: int | None = None
+    policy_title: str | None = None
 
 
 class EvaluationResultSchema(BaseModel):
@@ -52,6 +54,8 @@ class IssueOut(BaseModel):
     evidence: str | None
     suggested_action: str | None
     source: str
+    policy_id: int | None = None
+    policy_title: str | None = None
 
 
 class EvaluationOut(BaseModel):
@@ -80,7 +84,8 @@ class EvaluationOut(BaseModel):
             evidence_assessment=ev.evidence_assessment,
             prompt_injection_detected=ev.prompt_injection_detected,
             issues=[IssueOut(category=i.category, severity=i.severity, reason=i.reason,
-                             evidence=i.evidence, suggested_action=i.suggested_action, source=i.source)
+                             evidence=i.evidence, suggested_action=i.suggested_action, source=i.source,
+                             policy_id=i.policy_id, policy_title=i.policy_title)
                     for i in ev.issues],
             suggested_reply=ev.suggested_reply, human_review_required=ev.human_review_required,
             evaluation_model=ev.evaluation_model, prompt_version=ev.prompt_version,

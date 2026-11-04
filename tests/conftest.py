@@ -17,6 +17,7 @@ from app.core.database import SessionLocal  # noqa: E402
 from app.models.business import Business  # noqa: E402
 from app.models.conversation import Conversation  # noqa: E402
 from app.models.evaluation import Evaluation, EvaluationIssue  # noqa: E402
+from app.models.policy import EvidenceRecord, Policy  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +27,8 @@ def clean_db():
     # evaluation from an earlier test could otherwise join onto a new
     # conversation that reuses the same id
     db.query(EvaluationIssue).delete()
+    db.query(Policy).delete()
+    db.query(EvidenceRecord).delete()
     db.query(Evaluation).delete()
     db.query(Conversation).delete()
     db.query(Business).delete()

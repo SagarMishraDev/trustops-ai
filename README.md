@@ -6,14 +6,17 @@ safe, relevant and policy-compliant answers. It does NOT replace the chatbot -
 it independently monitors it, flags incorrect / unsupported / risky answers,
 explains why, and suggests a safer reply.
 
-## Current status: Phase 3 - AI Evaluation Engine (complete, tested)
+## Current status: Phase 4 - Policy & Evidence Engine (complete, tested)
 Working: FastAPI app, config, logging, `GET /` and `GET /health`; SQLAlchemy DB (SQLite, PostgreSQL-ready);
 API-key auth with business-level isolation; conversation ingestion via REST, CSV upload, JSON upload and webhooks,
 with duplicate protection and per-record error reporting. Phase 3 adds the evaluation engine:
 deterministic checks (sensitive data, unsupported claims, relevance, completeness) + a LangChain/LCEL
 evaluator (mock by default; real LLM via env config), deterministic scoring, risk levels, suggested
 replies, human-review flags - all stored in the DB with model + prompt version. Tests: 31/31 passing.
-Not yet built (honest scope): policy management CRUD (Phase 4 - the engine already accepts policy texts),
+Phase 4 adds policy management (CRUD, enable/disable, 5 one-click presets) - enabled policies are
+applied automatically to every evaluation, each violation records which policy fired, and company
+evidence records are checked automatically so supported claims become 'verified'. Tests: 43/43 passing.
+Not yet built (honest scope): dashboard UI (Phase 5),
 policies (Phase 4), dashboard (Phase 5), benchmark (Phase 6), webhooks (Phase 7),
 Docker deployment (Phase 8).
 
@@ -54,6 +57,19 @@ How scoring works (deterministic, explainable): each issue costs points by sever
 A claim with no evidence is **unsupported** - never labelled false, never verified.
 Real LLM: set `LLM_PROVIDER=openai` (or an OpenAI-compatible base URL) and `LLM_API_KEY` in your `.env`.
 
+## Phase 4 - policies & evidence
+```powershell
+curl -X POST http://127.0.0.1:8000/api/v1/policies/presets/apply -H "X-API-Key: tok_YOUR_KEY"   # 5 starter policies
+curl -X POST http://127.0.0.1:8000/api/v1/policies -H "X-API-Key: tok_YOUR_KEY" -H "Content-Type: application/json" -d '{\"title\":\"No discount promises\",\"rule_text\":\"The chatbot must never offer discounts without manager approval.\"}'
+curl -X POST http://127.0.0.1:8000/api/v1/evidence -H "X-API-Key: tok_YOUR_KEY" -H "Content-Type: application/json" -d '{\"topic\":\"Order 123\",\"content\":\"Order delivered and confirmed by courier.\"}'
+```
+From now on you do NOT pass policies/evidence in evaluation requests - the system loads your
+business's enabled policies and evidence records itself. Policy engine rule: a policy fires only
+when it is prohibitive ("must not/never/only authorized/escalate"), shares a topic with the
+response (refund, delivery, medical, discount, credentials, personal data...), and the response
+makes a definitive statement/promise on that topic. "Do not promise dates" rules fire only on
+future promises, not on statements about the past (those are checked against evidence instead).
+
 Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET /api/v1/conversations/{id}` ·
 `POST /api/v1/conversations/upload` (CSV) · `POST /api/v1/conversations/upload-json` · `POST /api/v1/webhooks/conversations`
 
@@ -61,7 +77,7 @@ Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET
 ```powershell
 pytest -v
 ```
-Expected: 31 passed (Phases 1-2 plus Phase 3: deterministic checks, scoring, evidence states, prompt-injection handling, broken-LLM fallback, bulk + filters, isolation).
+Expected: 43 passed (Phases 1-3 plus Phase 4: policy CRUD/presets/isolation, generalized policy engine, disabled-policy skip, evidence auto-verify, policy snapshot surviving deletion).
 
 ## Project structure
 ```

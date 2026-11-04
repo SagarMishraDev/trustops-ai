@@ -149,16 +149,93 @@ def run_deterministic_checks(user_message: str, assistant_response: str,
     issues += claim_issues
     issues += check_relevance(user_message, assistant_response)
     issues += check_completeness_clarity(assistant_response)
-    # Explicit business policies: keyword rule - a policy that says the bot
-    # "must not approve refunds" + a response claiming refund approval.
-    low = assistant_response.lower()
+    issues += check_policies(assistant_response, policies)
+    return issues, assessment, detect_prompt_injection(user_message)
+
+
+# ---------------- Policy rule engine (Phase 4) ----------------
+# A policy is enforced deterministically when THREE things line up:
+#   1. the rule is prohibitive/escalating ("must not", "never", "only
+#      authorized", "escalate", ...) - informational policies are context
+#      for the LLM, not hard rules for this engine;
+#   2. the rule and the response share a TOPIC (refund, delivery, medical...);
+#   3. the response contains an ACTION/promise marker (approved, will,
+#      guaranteed, prescribed, give you...).
+# Every fired issue records the policy id + title, so a reviewer can see
+# exactly WHICH rule was broken.
+PROHIBITIVE_MARKERS = ["must not", "never", "only authorized", "should not",
+                       "must never", "not allowed", "prohibited", "escalate",
+                       "must be escalated", "do not", "don't"]
+TOPIC_KEYWORDS = {
+    "refund": ["refund", "repayment"],
+    "delivery": ["delivery", "delivered", "deliver", "arrives", "shipped", "dispatch"],
+    "credentials": ["password", "otp", "credential", "pin", "cvv"],
+    "discount": ["discount", "coupon", "percent off"],
+    "medical": ["medical", "medicine", "diagnosis", "diagnosed", "treatment", "prescription", "prescribed", "symptom", "dosage"],
+    "financial": ["financial", "loan", "investment", "invest", "interest rate", "credit decision"],
+    "personal_data": ["email", "phone number", "another customer", "personal data", "private data"],
+    "payment": ["payment", "paid", "transaction", "charged"],
+    "booking": ["booking", "reservation", "appointment"],
+    "price": ["price", "pricing", "charge", "fee"],
+}
+ACTION_MARKERS = ["approved", "processed", "confirmed", "delivered", "guaranteed",
+                  "promise", "will ", "offer", "give you", "free", "prescribed",
+                  "diagnosis is", "share", "send", "disclosed", "revealed"]
+
+
+def _policy_parts(policy) -> tuple[int | None, str | None, str]:
+    """Accept a plain rule string (Phase 3 style) or a Policy-like object/dict."""
+    if isinstance(policy, str):
+        return None, None, policy
+    if isinstance(policy, dict):
+        return policy.get("id"), policy.get("title"), policy.get("rule_text", "")
+    return getattr(policy, "id", None), getattr(policy, "title", None), getattr(policy, "rule_text", str(policy))
+
+
+def _topics_in(text_low: str) -> set[str]:
+    return {topic for topic, keys in TOPIC_KEYWORDS.items() if any(k in text_low for k in keys)}
+
+
+def check_policies(assistant_response: str, policies: list) -> list[IssueSchema]:
+    issues: list[IssueSchema] = []
+    resp_low = assistant_response.lower()
+    resp_topics = _topics_in(resp_low)
+    if not resp_topics:
+        return issues
+    action_hit = any(m in resp_low for m in ACTION_MARKERS)
     for policy in policies:
-        plow = policy.lower()
-        if "refund" in plow and ("must not" in plow or "never" in plow or "only authorized" in plow) and "refund" in low and ("approved" in low or "processed" in low):
+        pid, ptitle, rule_text = _policy_parts(policy)
+        rule_low = rule_text.lower()
+        if not any(m in rule_low for m in PROHIBITIVE_MARKERS):
+            continue  # informational policy: LLM context only, not a hard rule
+        shared = _topics_in(rule_low) & resp_topics
+        if not shared:
+            continue
+        topic = sorted(shared)[0]
+        # Precise special case first: refund approval (the classic violation)
+        if topic == "refund" and ("approved" in resp_low or "processed" in resp_low):
             issues.append(IssueSchema(
                 category="policy_violation", severity="high", source="deterministic",
                 reason="The response approves/processes a refund, which the business policy reserves or forbids.",
-                evidence=policy,
+                evidence=rule_text, policy_id=pid, policy_title=ptitle,
                 suggested_action="Replace with: the request has been received and will be reviewed by the team.",
             ))
-    return issues, assessment, detect_prompt_injection(user_message)
+            continue
+        # Precision guard: a "do not PROMISE dates/timelines" rule fires only
+        # on a future promise - a statement that something already happened
+        # (checked by the claims layer against evidence) is not a promise.
+        if "promis" in rule_low and any(w in rule_low for w in ("date", "timeline", "when")):
+            future_promise = re.search(
+                r"will (?:be )?(?:deliver|arrive|reach|ship)|within \d+|guaranteed|by tomorrow",
+                resp_low)
+            if not future_promise:
+                continue
+        if action_hit:
+            label = f"Policy '{ptitle}'" if ptitle else "A business policy"
+            issues.append(IssueSchema(
+                category="policy_violation", severity="high", source="deterministic",
+                reason=f"{label} restricts this topic ({topic}), but the response makes a definitive statement or promise about it.",
+                evidence=rule_text, policy_id=pid, policy_title=ptitle,
+                suggested_action="Follow the policy: avoid the definitive claim/promise, or escalate to a human.",
+            ))
+    return issues

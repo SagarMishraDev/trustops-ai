@@ -105,6 +105,7 @@ def evaluate_conversation(db: Session, conversation: Conversation,
             evaluation_id=ev.id, category=issue.category, severity=issue.severity,
             reason=issue.reason, evidence=issue.evidence,
             suggested_action=issue.suggested_action, source=issue.source,
+            policy_id=issue.policy_id, policy_title=issue.policy_title,
         ))
     db.commit()
     db.refresh(ev)

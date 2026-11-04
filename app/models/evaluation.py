@@ -48,5 +48,7 @@ class EvaluationIssue(Base):
     evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
     suggested_action: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="deterministic")  # deterministic | llm | mock
+    policy_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # snapshot, survives policy deletion
+    policy_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     evaluation = relationship("Evaluation", back_populates="issues")
