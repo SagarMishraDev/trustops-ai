@@ -6,7 +6,7 @@ safe, relevant and policy-compliant answers. It does NOT replace the chatbot -
 it independently monitors it, flags incorrect / unsupported / risky answers,
 explains why, and suggests a safer reply.
 
-## Current status: Phase 7 - Live Integration Hardening (complete, tested)
+## Current status: COMPLETE — all 8 phases built, tested and documented
 Working: FastAPI app, config, logging, `GET /` and `GET /health`; SQLAlchemy DB (SQLite, PostgreSQL-ready);
 API-key auth with business-level isolation; conversation ingestion via REST, CSV upload, JSON upload and webhooks,
 with duplicate protection and per-record error reporting. Phase 3 adds the evaluation engine:
@@ -54,9 +54,16 @@ req = urllib.request.Request(URL, data=body, method="POST", headers={
     "X-API-Key": API_KEY, "X-TrustOps-Timestamp": ts, "X-TrustOps-Signature": sig,
     "Content-Type": "application/json"})
 ```
-Not yet built (honest scope):
-policies (Phase 4), dashboard (Phase 5), benchmark (Phase 6), webhooks (Phase 7),
-Docker deployment (Phase 8).
+Phase 8 (final): Dockerfile (non-root, healthcheck, migrations-then-serve) and
+docker-compose with PostgreSQL 16; Alembic migrations own the production schema — the initial
+migration was generated from the models and VERIFIED by applying it to a real PostgreSQL 16 and
+running the full golden path against it (seed avg 52.5, benchmark F1 0.9552 — identical to SQLite).
+Post-deploy smoke test: `BASE_URL=... python scripts/smoke_test.py` (7 checks). Docs:
+`docs/ARCHITECTURE.md`, `docs/DEPLOYMENT.md`. Honest limits that remain: Docker itself could not be
+run inside the build sandbox (no Docker daemon) — the compose file is YAML-validated and every
+non-Docker step (migrations, app boot, smoke path) was executed for real against PostgreSQL;
+contradiction detection needs a real LLM (benchmark FN=3 by design); rate limiting is per-process
+memory until Redis is added for multi-instance deployments; cost figures are estimates.
 
 ## Tech stack
 Python 3.11+, FastAPI, Uvicorn, Pydantic, python-dotenv.
@@ -126,7 +133,7 @@ Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET
 ```powershell
 pytest -v
 ```
-Expected: 66 passed (Phases 1-6 plus Phase 7: secret shown once + never leaked, signed webhook accepted, tampered/wrong-secret/stale all 401 with distinct error codes, structured errors + request IDs, security headers, 429 rate limiting).
+Expected: 69 passed — the full suite across all 8 phases (ingestion, evaluation engine, policy & evidence, dashboard & reviews, benchmark, hardening, deployment assets).
 
 ## Project structure
 ```

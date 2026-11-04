@@ -85,7 +85,7 @@ def create_app() -> FastAPI:
             "status": "running",
             "docs": "/docs",
             "health": "/health",
-            "phase": "Phase 7 - Live Integration Hardening",
+            "phase": "Phase 8 - Deployment & Final Documentation (complete)",
         }
 
     static_dir = Path(__file__).parent / "static"

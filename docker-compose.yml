@@ -1,0 +1,41 @@
+# TrustOps AI - one-command stack: app + PostgreSQL
+#   docker compose up --build
+#   -> dashboard: http://localhost:8000/dashboard   API docs: /docs
+# Secrets below are LOCAL DEV defaults - override every one of them in a
+# real deployment (use a .env file next to this compose file or your
+# platform's secret manager). Never commit real secrets.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trustops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trustops_dev_pw}
+      POSTGRES_DB: trustops
+    volumes:
+      - trustops_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trustops -d trustops"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://trustops:${POSTGRES_PASSWORD:-trustops_dev_pw}@db:5432/trustops
+      ENVIRONMENT: production
+      DEBUG: "false"
+      # LLM - leave as mock for a zero-cost start; set a real provider + key to enable AI judging
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_MODEL: ${LLM_MODEL:-mock-evaluator-v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+    ports:
+      - "8000:8000"
+
+volumes:
+  trustops_pgdata:

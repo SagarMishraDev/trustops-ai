@@ -1,10 +1,12 @@
-# TrustOps AI - Phases 1-3
+# TrustOps AI - Phases 1-8
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
 python-dotenv>=1.0
 sqlalchemy>=2.0
+psycopg2-binary>=2.9  # PostgreSQL driver (compose/production)
+alembic>=1.13  # database migrations (Phase 8)
 python-multipart>=0.0.9
 langchain>=0.3
 langchain-core>=0.3
