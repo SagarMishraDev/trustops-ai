@@ -6,11 +6,14 @@ safe, relevant and policy-compliant answers. It does NOT replace the chatbot -
 it independently monitors it, flags incorrect / unsupported / risky answers,
 explains why, and suggests a safer reply.
 
-## Current status: Phase 2 - Conversation Ingestion (complete, tested)
+## Current status: Phase 3 - AI Evaluation Engine (complete, tested)
 Working: FastAPI app, config, logging, `GET /` and `GET /health`; SQLAlchemy DB (SQLite, PostgreSQL-ready);
 API-key auth with business-level isolation; conversation ingestion via REST, CSV upload, JSON upload and webhooks,
-with duplicate protection and per-record error reporting. Tests: 16/16 passing.
-Not yet built (honest scope): evaluation engine (Phase 3),
+with duplicate protection and per-record error reporting. Phase 3 adds the evaluation engine:
+deterministic checks (sensitive data, unsupported claims, relevance, completeness) + a LangChain/LCEL
+evaluator (mock by default; real LLM via env config), deterministic scoring, risk levels, suggested
+replies, human-review flags - all stored in the DB with model + prompt version. Tests: 31/31 passing.
+Not yet built (honest scope): policy management CRUD (Phase 4 - the engine already accepts policy texts),
 policies (Phase 4), dashboard (Phase 5), benchmark (Phase 6), webhooks (Phase 7),
 Docker deployment (Phase 8).
 
@@ -38,6 +41,19 @@ curl -X POST http://127.0.0.1:8000/api/v1/conversations/upload -H "X-API-Key: to
 # 3) List what was stored
 curl http://127.0.0.1:8000/api/v1/conversations -H "X-API-Key: tok_YOUR_KEY"
 ```
+## Phase 3 - evaluate conversations
+```powershell
+# Evaluate one conversation (internal id from the list endpoint). Policies are optional rule texts.
+curl -X POST http://127.0.0.1:8000/api/v1/evaluations -H "X-API-Key: tok_YOUR_KEY" -H "Content-Type: application/json" -d '{\"conversation_id\":2,\"policies\":[\"Only authorized staff can approve refunds.\"]}'
+# -> the sample refund conversation scores 30, status flagged, risk high, with a suggested safer reply
+# Evaluate everything at once:
+curl -X POST http://127.0.0.1:8000/api/v1/evaluations/bulk -H "X-API-Key: tok_YOUR_KEY" -H "Content-Type: application/json" -d '{}'
+```
+How scoring works (deterministic, explainable): each issue costs points by severity
+(critical 50, high 35, medium 20, low 10) from 100. Any high/critical issue -> flagged + human review.
+A claim with no evidence is **unsupported** - never labelled false, never verified.
+Real LLM: set `LLM_PROVIDER=openai` (or an OpenAI-compatible base URL) and `LLM_API_KEY` in your `.env`.
+
 Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET /api/v1/conversations/{id}` ·
 `POST /api/v1/conversations/upload` (CSV) · `POST /api/v1/conversations/upload-json` · `POST /api/v1/webhooks/conversations`
 
@@ -45,7 +61,7 @@ Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET
 ```powershell
 pytest -v
 ```
-Expected: 16 passed (Phase 1: root/health/404; Phase 2: auth, isolation, CSV/JSON import counts, duplicates, webhook idempotency).
+Expected: 31 passed (Phases 1-2 plus Phase 3: deterministic checks, scoring, evidence states, prompt-injection handling, broken-LLM fallback, bulk + filters, isolation).
 
 ## Project structure
 ```

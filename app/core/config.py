@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     llm_model: str = "mock-evaluator-v1"
     llm_api_key: str = ""  # set via .env only: LLM_API_KEY
     llm_temperature: float = 0.0
+    llm_base_url: str = ""  # for OpenAI-compatible providers (e.g. Inception/Mercury)
+    # Rough per-1K-token USD rates used ONLY for cost estimates (labelled estimates, not billing)
+    llm_input_cost_per_1k: float = 0.001
+    llm_output_cost_per_1k: float = 0.002
 
     # Uploads (Phase 2 enforces these)
     max_upload_size_mb: int = 10

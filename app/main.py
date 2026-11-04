@@ -16,6 +16,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.businesses import router as businesses_router
 from app.api.v1.conversations import router as conversations_router
 from app.api.v1.webhooks import router as webhooks_router
+from app.api.v1.evaluations import router as evaluations_router
 
 settings = get_settings()
 logger = setup_logging(debug=settings.debug)
@@ -37,13 +38,14 @@ def create_app() -> FastAPI:
             "status": "running",
             "docs": "/docs",
             "health": "/health",
-            "phase": "Phase 2 - Conversation Ingestion",
+            "phase": "Phase 3 - AI Evaluation Engine",
         }
 
     app.include_router(health_router)
     app.include_router(businesses_router)
     app.include_router(conversations_router)
     app.include_router(webhooks_router)
+    app.include_router(evaluations_router)
     logger.info("%s v%s started (env=%s)", settings.app_name, settings.app_version, settings.environment)
     return app
 
