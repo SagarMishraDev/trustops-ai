@@ -6,7 +6,7 @@ safe, relevant and policy-compliant answers. It does NOT replace the chatbot -
 it independently monitors it, flags incorrect / unsupported / risky answers,
 explains why, and suggests a safer reply.
 
-## Current status: Phase 4 - Policy & Evidence Engine (complete, tested)
+## Current status: Phase 5 - Dashboard, Analytics & Human Review (complete, tested)
 Working: FastAPI app, config, logging, `GET /` and `GET /health`; SQLAlchemy DB (SQLite, PostgreSQL-ready);
 API-key auth with business-level isolation; conversation ingestion via REST, CSV upload, JSON upload and webhooks,
 with duplicate protection and per-record error reporting. Phase 3 adds the evaluation engine:
@@ -16,7 +16,12 @@ replies, human-review flags - all stored in the DB with model + prompt version. 
 Phase 4 adds policy management (CRUD, enable/disable, 5 one-click presets) - enabled policies are
 applied automatically to every evaluation, each violation records which policy fired, and company
 evidence records are checked automatically so supported claims become 'verified'. Tests: 43/43 passing.
-Not yet built (honest scope): dashboard UI (Phase 5),
+Phase 5 adds: analytics APIs computed from the real DB (overview, issue distribution, 14-day trends),
+a human review queue (decisions stored separately - the AI evaluation is never edited), a settings
+endpoint that never exposes key values, a one-click demo seed, and a SaaS dashboard served at
+`/dashboard` (sidebar, KPI cards, Chart.js charts, conversation explorer with filters, evaluation
+detail with review form, policy management, settings actions, dark/light theme). Tests: 51/51 passing.
+Not yet built (honest scope): benchmark + prompt comparison (Phase 6),
 policies (Phase 4), dashboard (Phase 5), benchmark (Phase 6), webhooks (Phase 7),
 Docker deployment (Phase 8).
 
@@ -70,6 +75,17 @@ response (refund, delivery, medical, discount, credentials, personal data...), a
 makes a definitive statement/promise on that topic. "Do not promise dates" rules fire only on
 future promises, not on statements about the past (those are checked against evidence instead).
 
+## Phase 5 - use the dashboard
+```powershell
+uvicorn app.main:app --reload --port 8000
+# open http://127.0.0.1:8000/dashboard
+# -> click "Create demo workspace (1 click)": makes a business, applies presets,
+#    seeds 8 marked DEMO conversations and evaluates them with the real engine.
+#    Expected overview: 8 conversations, 1 passed, 7 flagged, avg score 52.5, 7 pending reviews.
+```
+Review rule: submitting a review (confirmed / false positive) appends a HumanReview record.
+The original evaluation row is never modified - both judgments stay on record.
+
 Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET /api/v1/conversations/{id}` ·
 `POST /api/v1/conversations/upload` (CSV) · `POST /api/v1/conversations/upload-json` · `POST /api/v1/webhooks/conversations`
 
@@ -77,7 +93,7 @@ Endpoints: `POST /api/v1/businesses` · `POST|GET /api/v1/conversations` · `GET
 ```powershell
 pytest -v
 ```
-Expected: 43 passed (Phases 1-3 plus Phase 4: policy CRUD/presets/isolation, generalized policy engine, disabled-policy skip, evidence auto-verify, policy snapshot surviving deletion).
+Expected: 51 passed (Phases 1-4 plus Phase 5: real analytics numbers, review flow + evaluation immutability, queue behaviour, settings key-safety, idempotent demo seed, dashboard serving).
 
 ## Project structure
 ```
