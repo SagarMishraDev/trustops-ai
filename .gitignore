@@ -6,3 +6,5 @@ __pycache__/
 data/*.db
 *.log
 .DS_Store
+tests/*.db
+data/*.db-journal

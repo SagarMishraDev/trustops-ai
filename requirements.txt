@@ -1,9 +1,11 @@
-# TrustOps AI - Phase 1 foundation (later phases add LangChain, SQLAlchemy, etc.)
+# TrustOps AI - Phase 1+2 (LangChain arrives in Phase 3)
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
 python-dotenv>=1.0
+sqlalchemy>=2.0
+python-multipart>=0.0.9
 # Testing
 pytest>=8.0
 httpx>=0.27

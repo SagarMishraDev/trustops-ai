@@ -1,0 +1,4 @@
+conversation_id,user_message,assistant_response,timestamp,session_id
+C001,"Where is my order?","Your order is delivered.",2026-11-04T10:30:00,S001
+C002,"Can I get a refund?","Your refund is approved.",2026-11-04T10:35:00,S002
+C003,"What are your opening hours?","We are open 9 AM to 9 PM, Monday to Saturday.",2026-11-04T10:40:00,S003

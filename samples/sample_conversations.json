@@ -1,0 +1,4 @@
+[
+  {"conversation_id": "J001", "user_message": "Do you deliver to Jaipur?", "assistant_response": "Yes, we deliver across Jaipur in 2-3 days.", "timestamp": "2026-11-04T11:00:00", "session_id": "S101"},
+  {"conversation_id": "J002", "user_message": "Can I change my delivery address?", "assistant_response": "Your address has been changed.", "timestamp": "2026-11-04T11:05:00", "session_id": "S102"}
+]

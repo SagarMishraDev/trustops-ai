@@ -1,7 +1,7 @@
 # TrustOps AI - Progress Checklist
 
 - [x] Phase 1: Foundation - FastAPI app, config, logging, root + health, tests
-- [ ] Phase 2: Conversation ingestion - CSV / JSON / REST / Webhook
+- [x] Phase 2: Conversation ingestion - CSV / JSON / REST / Webhook + DB + API-key auth (16/16 tests)
 - [ ] Phase 3: AI evaluation engine - LangChain / LCEL, structured output
 - [ ] Phase 4: Policy & evidence engine
 - [ ] Phase 5: Dashboard & UI

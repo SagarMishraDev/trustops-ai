@@ -3,16 +3,19 @@
 Run from the project root (trustops-ai folder):
     uvicorn app.main:app --reload --port 8000
 
-Then open:
-    http://127.0.0.1:8000/         -> root info
-    http://127.0.0.1:8000/health  -> health check
-    http://127.0.0.1:8000/docs    -> interactive API docs (Swagger)
+Open: /  (root) | /health | /docs (Swagger)
+Phase 2 adds: /api/v1/businesses, /api/v1/conversations (+ /upload,
+/upload-json), /api/v1/webhooks/conversations - all behind X-API-Key.
 """
 from fastapi import FastAPI
 from app import __version__
 from app.core.config import get_settings
+from app.core.database import init_db
 from app.core.logging_config import setup_logging
 from app.api.v1.health import router as health_router
+from app.api.v1.businesses import router as businesses_router
+from app.api.v1.conversations import router as conversations_router
+from app.api.v1.webhooks import router as webhooks_router
 
 settings = get_settings()
 logger = setup_logging(debug=settings.debug)
@@ -22,10 +25,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="LLM evaluation, monitoring and reliability platform. "
-                    "Evaluates chatbot/agent conversations for correctness, "
-                    "hallucination risk, policy violations and sensitive-data exposure.",
+        description="LLM evaluation, monitoring and reliability platform.",
     )
+    init_db()
 
     @app.get("/", tags=["health"])
     def root():
@@ -35,11 +37,13 @@ def create_app() -> FastAPI:
             "status": "running",
             "docs": "/docs",
             "health": "/health",
-            "phase": "Phase 1 - Foundation",
+            "phase": "Phase 2 - Conversation Ingestion",
         }
 
     app.include_router(health_router)
-    # Phase 2+ routers will be included here (conversations, evaluations, ...)
+    app.include_router(businesses_router)
+    app.include_router(conversations_router)
+    app.include_router(webhooks_router)
     logger.info("%s v%s started (env=%s)", settings.app_name, settings.app_version, settings.environment)
     return app
 
